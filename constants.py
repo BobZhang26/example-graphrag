@@ -8,7 +8,7 @@ def read_documents_from_files():
     for filename in os.listdir(directory):
         if filename.endswith(".txt"):
             file_path = os.path.join(directory, filename)
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 documents.append(file.read())
     return documents
 
