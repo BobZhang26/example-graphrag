@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from constants import DOCUMENTS
 
-load_dotenv()
+load_dotenv(dotenv_path=".env.example")
 
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -16,7 +16,7 @@ def split_documents_into_chunks(documents, chunk_size=600, overlap_size=100):
     chunks = []
     for document in documents:
         for i in range(0, len(document), chunk_size - overlap_size):
-            chunk = document[i:i + chunk_size]
+            chunk = document[i : i + chunk_size]
             chunks.append(chunk)
     return chunks
 
@@ -29,9 +29,12 @@ def extract_elements_from_chunks(chunks):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Extract entities and relationships from the following text."},
-                {"role": "user", "content": chunk}
-            ]
+                {
+                    "role": "system",
+                    "content": "Extract entities and relationships from the following text.",
+                },
+                {"role": "user", "content": chunk},
+            ],
         )
         print(response.choices[0].message.content)
         entities_and_relations = response.choices[0].message.content
@@ -47,9 +50,12 @@ def summarize_elements(elements):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Summarize the following entities and relationships in a structured format. Use \"->\" to represent relationships, after the \"Relationships:\" word."},
-                {"role": "user", "content": element}
-            ]
+                {
+                    "role": "system",
+                    "content": 'Summarize the following entities and relationships in a structured format. Use "->" to represent relationships, after the "Relationships:" word.',
+                },
+                {"role": "user", "content": element},
+            ],
         )
         print("Element summary:", response.choices[0].message.content)
         summary = response.choices[0].message.content
@@ -71,7 +77,9 @@ def build_graph_from_summaries(summaries):
                 entities_section = True
                 relationships_section = False
                 continue
-            elif line.startswith("### Relationships:") or line.startswith("**Relationships:**"):
+            elif line.startswith("### Relationships:") or line.startswith(
+                "**Relationships:**"
+            ):
                 entities_section = False
                 relationships_section = True
                 continue
@@ -98,7 +106,8 @@ def detect_communities(graph):
     index = 0
     for component in nx.connected_components(graph):
         print(
-            f"Component index {index} of {len(list(nx.connected_components(graph)))}:")
+            f"Component index {index} of {len(list(nx.connected_components(graph)))}:"
+        )
         subgraph = graph.subgraph(component)
         if len(subgraph.nodes) > 1:  # Leiden algorithm requires at least 2 nodes
             try:
@@ -124,16 +133,18 @@ def summarize_communities(communities, graph):
         description = "Entities: " + ", ".join(nodes) + "\nRelationships: "
         relationships = []
         for edge in edges:
-            relationships.append(
-                f"{edge[0]} -> {edge[2]['label']} -> {edge[1]}")
+            relationships.append(f"{edge[0]} -> {edge[2]['label']} -> {edge[1]}")
         description += ", ".join(relationships)
 
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "Summarize the following community of entities and relationships."},
-                {"role": "user", "content": description}
-            ]
+                {
+                    "role": "system",
+                    "content": "Summarize the following community of entities and relationships.",
+                },
+                {"role": "user", "content": description},
+            ],
         )
         summary = response.choices[0].message.content.strip()
         community_summaries.append(summary)
@@ -148,21 +159,28 @@ def generate_answers_from_communities(community_summaries, query):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Answer the following query based on the provided summary."},
-                {"role": "user", "content": f"Query: {query} Summary: {summary}"}
-            ]
+                {
+                    "role": "system",
+                    "content": "Answer the following query based on the provided summary.",
+                },
+                {"role": "user", "content": f"Query: {query} Summary: {summary}"},
+            ],
         )
         print("Intermediate answer:", response.choices[0].message.content)
-        intermediate_answers.append(
-            response.choices[0].message.content)
+        intermediate_answers.append(response.choices[0].message.content)
 
     final_response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system",
-                "content": "Combine these answers into a final, concise response."},
-            {"role": "user", "content": f"Intermediate answers: {intermediate_answers}"}
-        ]
+            {
+                "role": "system",
+                "content": "Combine these answers into a final, concise response.",
+            },
+            {
+                "role": "user",
+                "content": f"Intermediate answers: {intermediate_answers}",
+            },
+        ],
     )
     final_answer = final_response.choices[0].message.content
     return final_answer
@@ -171,8 +189,7 @@ def generate_answers_from_communities(community_summaries, query):
 # Putting It All Together
 def graph_rag_pipeline(documents, query, chunk_size=600, overlap_size=100):
     # Step 1: Split documents into chunks
-    chunks = split_documents_into_chunks(
-        documents, chunk_size, overlap_size)
+    chunks = split_documents_into_chunks(documents, chunk_size, overlap_size)
 
     # Step 2: Extract elements from chunks
     elements = extract_elements_from_chunks(chunks)
@@ -190,14 +207,13 @@ def graph_rag_pipeline(documents, query, chunk_size=600, overlap_size=100):
     community_summaries = summarize_communities(communities, graph)
 
     # Step 6: Generate answers from community summaries
-    final_answer = generate_answers_from_communities(
-        community_summaries, query)
+    final_answer = generate_answers_from_communities(community_summaries, query)
 
     return final_answer
 
 
 # Example usage
 query = "What are the main themes in these documents?"
-print('Query:', query)
+print("Query:", query)
 answer = graph_rag_pipeline(DOCUMENTS, query)
-print('Answer:', answer)
+print("Answer:", answer)
